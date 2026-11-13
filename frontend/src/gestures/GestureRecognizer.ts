@@ -2,7 +2,7 @@ import type { NormalizedLandmark } from '@mediapipe/tasks-vision'
 import type { TrackedHand } from './HandTracker'
 import { Debouncer, Ema } from './filters'
 
-export type Gesture = 'none' | 'pinch' | 'open_palm' | 'fist' | 'point'
+export type Gesture = 'none' | 'pinch' | 'open_palm' | 'fist' | 'point' | 'two_finger'
 
 export type HandInfo = {
   gesture: Gesture
@@ -22,6 +22,7 @@ export type GestureFrame = {
 const WRIST = 0
 const THUMB_TIP = 4
 const INDEX_TIP = 8
+const MIDDLE_TIP = 12
 const MIDDLE_MCP = 9
 
 // [tip, pip] for index, middle, ring, pinky
@@ -35,6 +36,7 @@ const FINGERS: [number, number][] = [
 const PINCH_ENTER = 0.25 // pinch starts below this ratio
 const PINCH_EXIT = 0.4 // pinch ends above this ratio (gap = hysteresis, prevents flicker)
 const EXTENDED_RATIO = 1.2
+const TWO_FINGER_GAP = 0.3 // index and middle tips must be closer than this (relative to hand size)
 const FRAMES_TO_SWITCH = 4
 const FRAMES_BEFORE_HAND_LOST = 8
 
@@ -107,6 +109,7 @@ export class GestureRecognizer {
 
     const [index, middle, ring, pinky] = extended
     const count = extended.filter(Boolean).length
+    const fingerGap = dist(lm[INDEX_TIP], lm[MIDDLE_TIP]) / handSize
 
     let raw: Gesture = 'none'
     let confidence = clarity
@@ -118,6 +121,8 @@ export class GestureRecognizer {
       raw = 'open_palm'
     } else if (count === 0) {
       raw = 'fist'
+    } else if (index && middle && !ring && !pinky && fingerGap < TWO_FINGER_GAP) {
+      raw = 'two_finger'
     } else if (index && !middle && !ring && !pinky) {
       raw = 'point'
     }
@@ -145,6 +150,8 @@ export class GestureRecognizer {
         return 'Fist'
       case 'point':
         return 'Pointing'
+      case 'two_finger':
+        return 'Two-finger'
       default:
         return 'Hand detected'
     }

@@ -1,22 +1,40 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useComponentStore } from '../store/useComponentStore'
 import { useExplodeStore } from '../store/useExplodeStore'
+import { usePartStore } from '../store/usePartStore'
+
+const PART_MOVE_GAIN = 6 // scene units per full camera width of hand movement
 
 type Part = {
   mesh: THREE.Mesh
   id: string
+  chain: string[]
   origin: THREE.Vector3 // original local position
-  offset: THREE.Vector3 // full-distance offset, in the mesh's parent space
+  offset: THREE.Vector3 // full-distance explode offset, in the mesh's parent space
+  user: THREE.Vector3 // manual offset from moving the part by hand
   dist: number
   amount: number // 0 = home, 1 = fully exploded (smoothed)
 }
 
 export default function ExplodedController() {
-  const { scene } = useThree()
+  const { scene, camera } = useThree()
   const nodes = useComponentStore((s) => s.nodes)
   const parts = useRef<Part[]>([])
+  const lastReset = useRef(usePartStore.getState().resetCount)
+
+  const tmp = useMemo(
+    () => ({
+      right: new THREE.Vector3(),
+      up: new THREE.Vector3(),
+      back: new THREE.Vector3(),
+      world: new THREE.Vector3(),
+      local: new THREE.Vector3(),
+      inv: new THREE.Matrix3(),
+    }),
+    [],
+  )
 
   // Build the part list whenever a model finishes loading
   useEffect(() => {
@@ -67,11 +85,14 @@ export default function ExplodedController() {
       const inverseLinear = new THREE.Matrix3().setFromMatrix4(toRoot).invert()
       const offset = dir.multiplyScalar(magnitude).applyMatrix3(inverseLinear)
 
+      const chain = mesh.userData.componentChain as string[]
       return {
         mesh,
-        id: (mesh.userData.componentChain as string[])[0],
+        id: chain[0],
+        chain,
         origin: mesh.position.clone(),
         offset,
+        user: new THREE.Vector3(),
         dist: len,
         amount: 0,
       }
@@ -103,12 +124,39 @@ export default function ExplodedController() {
     const { exploded, distance, sequential, openCount } = useExplodeStore.getState()
     const list = parts.current
 
+    // Put manually moved parts back
+    const ps = usePartStore.getState()
+    if (ps.resetCount !== lastReset.current) {
+      lastReset.current = ps.resetCount
+      for (const p of list) p.user.set(0, 0, 0)
+    }
+
+    // Move the selected part with the hand, along the screen plane
+    const [dx, dy] = ps.take()
+    const selected = useComponentStore.getState().selectedId
+    if ((dx !== 0 || dy !== 0) && selected) {
+      camera.matrixWorld.extractBasis(tmp.right, tmp.up, tmp.back)
+      tmp.world
+        .copy(tmp.right)
+        .multiplyScalar(dx * PART_MOVE_GAIN)
+        .addScaledVector(tmp.up, -dy * PART_MOVE_GAIN)
+
+      for (const p of list) {
+        if (!p.chain.includes(selected)) continue
+        tmp.inv.setFromMatrix4(p.mesh.parent!.matrixWorld).invert()
+        p.user.add(tmp.local.copy(tmp.world).applyMatrix3(tmp.inv))
+      }
+    }
+
     for (let i = 0; i < list.length; i++) {
       const p = list[i]
       const target = exploded && (!sequential || i < openCount) ? 1 : 0
       p.amount = THREE.MathUtils.damp(p.amount, target, 5, delta)
       if (Math.abs(p.amount - target) < 0.0005) p.amount = target
-      p.mesh.position.copy(p.origin).addScaledVector(p.offset, p.amount * distance)
+      p.mesh.position
+        .copy(p.origin)
+        .addScaledVector(p.offset, p.amount * distance)
+        .add(p.user)
     }
   })
 

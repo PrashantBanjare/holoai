@@ -1,12 +1,14 @@
 import { useEffect, useRef, type CSSProperties } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import { HandTracker } from '../../gestures/HandTracker'
-import { GestureRecognizer } from '../../gestures/GestureRecognizer' // NEW
+import { GestureRecognizer } from '../../gestures/GestureRecognizer'
 import { MotionTracker } from '../../gestures/MotionTracker'
-import { useMotionStore } from '../../store/useMotionStore'
-import { GestureMapper } from '../../gestures/GestureMapper'
 import { PointerTracker } from '../../gestures/PointerTracker'
+import { GestureMapper } from '../../gestures/GestureMapper'
+import { useMotionStore } from '../../store/useMotionStore'
 import { usePointerStore } from '../../store/usePointerStore'
+import Panel from '../../ui/Panel'
+import { C, btn } from '../../ui/theme'
 
 const CONNECTIONS: [number, number][] = [
   [0, 1], [1, 2], [2, 3], [3, 4],
@@ -16,18 +18,6 @@ const CONNECTIONS: [number, number][] = [
   [13, 17], [17, 18], [18, 19], [19, 20],
   [0, 17],
 ]
- 
-const panel: CSSProperties = {
-  position: 'absolute',
-  right: 16,
-  bottom: 16,
-  width: 280,
-  padding: 8,
-  background: 'rgba(2, 20, 32, 0.7)',
-  border: '1px solid rgba(56, 232, 255, 0.4)',
-  borderRadius: 8,
-  backdropFilter: 'blur(6px)',
-}
 
 const stage: CSSProperties = {
   position: 'relative',
@@ -48,23 +38,10 @@ const layer: CSSProperties = {
   objectFit: 'cover',
 }
 
-const toggleBtn: CSSProperties = {
-  width: '100%',
-  marginTop: 8,
-  padding: '8px 10px',
-  background: 'transparent',
-  color: '#cfeeff',
-  border: '1px solid rgba(56, 232, 255, 0.6)',
-  borderRadius: 4,
-  cursor: 'pointer',
-  letterSpacing: 1,
-  textTransform: 'uppercase',
-  fontSize: 12,
-}
-
 export default function GestureController() {
   const enabled = useAppStore((s) => s.handControlEnabled)
   const status = useAppStore((s) => s.trackerStatus)
+  const trackerMessage = useAppStore((s) => s.trackerMessage)
   const handsDetected = useAppStore((s) => s.handsDetected)
   const setEnabled = useAppStore((s) => s.setHandControlEnabled)
 
@@ -77,11 +54,10 @@ export default function GestureController() {
     const { setTrackerStatus, setHandsDetected, setHandControlEnabled, setGesture } =
       useAppStore.getState()
     const tracker = new HandTracker()
-    const recognizer = new GestureRecognizer() // NEW
+    const recognizer = new GestureRecognizer()
     const motionTracker = new MotionTracker()
-    const mapper = new GestureMapper()
     const pointerTracker = new PointerTracker()
-    let lastPublish = 0
+    const mapper = new GestureMapper()
     let stream: MediaStream | null = null
     let raf = 0
     let cancelled = false
@@ -134,23 +110,23 @@ export default function GestureController() {
             }
           }
 
-          // NEW: recognize gestures and publish only when something visibly changed
-          const frame = recognizer.update(hands)
+          // Recognize gestures, turn them into motion, and apply them to the model
           const now = performance.now()
+          const frame = recognizer.update(hands)
           const motion = motionTracker.update(hands, frame, now)
+          const pointer = pointerTracker.update(frame, now)
           mapper.update(frame, motion, now)
-          usePointerStore.getState().publish(pointerTracker.update(frame, now))
+
+          const m0 = motion.hands[0]
+          useMotionStore.getState().publish({
+            dx: m0?.dx ?? 0,
+            dy: m0?.dy ?? 0,
+            droll: m0?.droll ?? 0,
+            twoHandDelta: motion.twoHandDelta,
+          })
           if (motion.swipe) useMotionStore.getState().registerSwipe(motion.swipe)
-          if (now - lastPublish > 100) {
-            lastPublish = now
-            const h = motion.hands[0]
-            useMotionStore.getState().publish({
-              dx: h?.dx ?? 0,
-              dy: h?.dy ?? 0,
-              droll: h?.droll ?? 0,
-              twoHandDelta: motion.twoHandDelta,
-            })
-          }
+          usePointerStore.getState().publish(pointer)
+
           const conf = frame.hands.length
             ? Math.round((frame.hands.reduce((s, h) => s + h.confidence, 0) / frame.hands.length) * 20) / 20
             : 0
@@ -166,7 +142,16 @@ export default function GestureController() {
         loop()
       } catch (err) {
         console.error('Hand control failed:', err)
-        setTrackerStatus('error')
+        const name = err instanceof DOMException ? err.name : ''
+        const message =
+          name === 'NotAllowedError'
+            ? 'Camera permission was denied. Allow the camera in the browser address bar and try again.'
+            : name === 'NotFoundError'
+              ? 'No camera found.'
+              : name === 'NotReadableError'
+                ? 'The camera is busy in another app.'
+                : 'Could not start hand tracking (is hand_landmarker.task in public/models?).'
+        setTrackerStatus('error', message)
         setHandControlEnabled(false)
       }
     }
@@ -180,10 +165,10 @@ export default function GestureController() {
       tracker.close()
       if (videoRef.current) videoRef.current.srcObject = null
       setHandsDetected(0)
-      setGesture('No hand', 0) // NEW
+      setGesture('No hand', 0)
       useMotionStore.getState().clear()
-      useAppStore.getState().setInteractionMode('Idle')
       usePointerStore.getState().clear()
+      useAppStore.getState().setInteractionMode('Idle')
       if (useAppStore.getState().trackerStatus !== 'error') setTrackerStatus('idle')
     }
   }, [enabled])
@@ -192,7 +177,7 @@ export default function GestureController() {
     status === 'loading'
       ? 'Loading hand tracker...'
       : status === 'error'
-        ? 'Camera or tracker failed (see console)'
+        ? trackerMessage || 'Camera or tracker failed (see console)'
         : enabled
           ? handsDetected > 0
             ? `Hand detected (${handsDetected})`
@@ -200,15 +185,32 @@ export default function GestureController() {
           : 'Camera off'
 
   return (
-    <div style={panel}>
+    <Panel title="Camera">
       <div style={stage}>
         <video ref={videoRef} style={layer} playsInline muted />
         <canvas ref={canvasRef} style={layer} />
+        {!enabled && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: C.muted,
+              fontSize: 12,
+            }}
+          >
+            Camera off
+          </div>
+        )}
       </div>
-      <div style={{ marginTop: 8, fontSize: 12, color: '#38e8ff' }}>{statusText}</div>
-      <button style={toggleBtn} onClick={() => setEnabled(!enabled)}>
-        {enabled ? 'Disable Hand Control' : 'Enable Hand Control'}
+      <div style={{ marginTop: 8, fontSize: 12, color: status === 'error' ? C.danger : C.accent }}>
+        {statusText}
+      </div>
+      <button style={{ ...btn(enabled), width: '100%', marginTop: 8 }} onClick={() => setEnabled(!enabled)}>
+        {enabled ? 'Turn camera off' : 'Turn camera on'}
       </button>
-    </div>
+    </Panel>
   )
 }

@@ -1,8 +1,8 @@
 node_modules/
 venv/
 __pycache__/
-*.pyc
-.env
+.pytest_cache/
 dist/
+.env
 backend/storage/uploads/*
 !backend/storage/uploads/.gitkeep

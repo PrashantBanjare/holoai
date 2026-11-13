@@ -1,7 +1,11 @@
 /** Exponential moving average: smooths jittery values. Lower alpha = smoother but slower. */
 export class Ema {
   private value: number | null = null
-  constructor(private alpha: number) {}
+  private alpha: number
+
+  constructor(alpha: number) {
+    this.alpha = alpha
+  }
 
   next(x: number) {
     this.value = this.value === null ? x : this.value + this.alpha * (x - this.value)
@@ -18,14 +22,15 @@ export class Ema {
  * frames before it replaces the current one. Single noisy frames are ignored.
  */
 export class Debouncer<T> {
+  current: T
   private candidate: T
   private count = 0
+  private framesToSwitch: number
 
-  constructor(
-    public current: T,
-    private framesToSwitch: number,
-  ) {
+  constructor(current: T, framesToSwitch: number) {
+    this.current = current
     this.candidate = current
+    this.framesToSwitch = framesToSwitch
   }
 
   update(raw: T): T {

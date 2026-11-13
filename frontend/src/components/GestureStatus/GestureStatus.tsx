@@ -1,25 +1,6 @@
 import type { CSSProperties } from 'react'
 import { useAppStore } from '../../store/useAppStore'
-
-const panel: CSSProperties = {
-  position: 'absolute',
-  top: 16,
-  right: 16,
-  width: 220,
-  padding: 12,
-  background: 'rgba(2, 20, 32, 0.7)',
-  border: '1px solid rgba(56, 232, 255, 0.4)',
-  borderRadius: 8,
-  backdropFilter: 'blur(6px)',
-  fontSize: 12,
-}
-
-const title: CSSProperties = {
-  letterSpacing: 2,
-  textTransform: 'uppercase',
-  color: '#38e8ff',
-  marginBottom: 8,
-}
+import Panel from '../../ui/Panel'
 
 const seg = (active: boolean): CSSProperties => ({
   flex: 1,
@@ -42,11 +23,13 @@ export default function GestureStatus() {
   const pinchMode = useAppStore((s) => s.pinchMode)
   const setPinchMode = useAppStore((s) => s.setPinchMode)
 
+  const locked = useAppStore((s) => s.locked)
+
   return (
-    <div style={panel}>
-      <div style={title}>Gesture status</div>
+    <Panel title="Gesture status">
       <div>Hand control: {enabled ? 'ON' : 'OFF'}</div>
       <div>Hands: {hands}</div>
+      {locked && <div style={{ color: '#ffb347' }}>🔒 Locked (both fists to unlock)</div>}
       <div style={{ marginTop: 6, fontSize: 15, color: '#ffffff' }}>{enabled ? label : '—'}</div>
       <div style={{ marginTop: 4, fontSize: 13, color: '#38e8ff' }}>{enabled ? mode : '—'}</div>
       <div style={{ marginTop: 8, height: 6, background: 'rgba(56,232,255,0.15)', borderRadius: 3 }}>
@@ -71,6 +54,6 @@ export default function GestureStatus() {
           Move
         </button>
       </div>
-    </div>
+    </Panel>
   )
 }

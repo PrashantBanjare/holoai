@@ -1,43 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
-import { absoluteUrl, analyzeImage, generateModel, uploadImage } from '../../api/apiClient'
-import { useModelStore } from '../../store/useModelStore'
-import { useAppStore } from '../../store/useAppStore'
-import { useExplodeStore } from '../../store/useExplodeStore'
+import { absoluteUrl, analyzeImage, generateModel, listModels, uploadImage } from '../../api/apiClient'
+import { useModelStore, LOCAL_LIBRARY } from '../../store/useModelStore'
+import { showModel, loadLibraryItem } from '../../model/loadModel'
+import Panel from '../../ui/Panel'
+import { input } from '../../ui/theme'
 
 const MAX_MB = 10
 const TYPES = ['image/jpeg', 'image/png', 'image/webp']
-
-const panel: CSSProperties = {
-  position: 'absolute',
-  top: 16,
-  left: '50%',
-  transform: 'translateX(-50%)',
-  width: 340,
-  padding: 12,
-  background: 'rgba(2, 20, 32, 0.75)',
-  border: '1px solid rgba(56, 232, 255, 0.4)',
-  borderRadius: 8,
-  backdropFilter: 'blur(6px)',
-  fontSize: 12,
-}
-
-const title: CSSProperties = {
-  letterSpacing: 2,
-  textTransform: 'uppercase',
-  color: '#38e8ff',
-  marginBottom: 8,
-}
-
-const input: CSSProperties = {
-  width: '100%',
-  padding: '8px 10px',
-  background: 'rgba(0, 0, 0, 0.35)',
-  color: '#ffffff',
-  border: '1px solid rgba(56, 232, 255, 0.5)',
-  borderRadius: 4,
-  outline: 'none',
-  fontSize: 13,
-}
 
 const dropzone: CSSProperties = {
   display: 'flex',
@@ -77,6 +46,7 @@ export default function UploadPanel() {
   const message = useModelStore((s) => s.message)
   const modelName = useModelStore((s) => s.name)
   const source = useModelStore((s) => s.source)
+  const library = useModelStore((s) => s.library)
 
   const inputRef = useRef<HTMLInputElement>(null)
   const busy = status === 'uploading' || status === 'analyzing' || status === 'generating'
@@ -95,6 +65,17 @@ export default function UploadPanel() {
     setFile(f)
     setNote('')
     setStatus('idle', '')
+  }, [])
+
+  // Model library: ask the backend, fall back to the built-in local models
+  useEffect(() => {
+    listModels()
+      .then((items) =>
+        useModelStore.getState().setLibrary(
+          items.map((m) => ({ ...m, url: absoluteUrl(m.url), source: 'catalog' })),
+        ),
+      )
+      .catch(() => useModelStore.getState().setLibrary(LOCAL_LIBRARY))
   }, [])
 
   // Preview thumbnail
@@ -137,9 +118,9 @@ export default function UploadPanel() {
 
   const generate = async () => {
     const text = prompt.trim()
-    const { setStatus, setModel } = useModelStore.getState()
-    if (!text && !file) {
-      setStatus('error', 'Type an object name or add an image.')
+    const { setStatus } = useModelStore.getState()
+    if (!text) {
+      setStatus('error', file ? 'Type the object name too, for example "engine".' : 'Type an object name.')
       return
     }
 
@@ -153,15 +134,13 @@ export default function UploadPanel() {
 
         setStatus('analyzing', 'Analyzing image...')
         const a = await analyzeImage(imageId)
-        setNote(`Image ${a.width}x${a.height}, dominant color ${a.dominant_color}. ${a.note}`)
+        setNote(`Image ${a.width}x${a.height}, ${a.format}, dominant color ${a.dominant_color}.`)
       }
 
       setStatus('generating', 'Generating model...')
-      const result = await generateModel({ prompt: text || undefined, image_id: imageId })
+      const result = await generateModel({ prompt: text, image_id: imageId })
 
-      setModel({ url: absoluteUrl(result.url), name: result.name, source: result.source })
-      useAppStore.getState().reset()
-      useExplodeStore.getState().returnToOriginal()
+      showModel({ url: absoluteUrl(result.url), name: result.name, source: result.source })
       setStatus('idle', `Loaded: ${result.name}`)
     } catch (e) {
       setStatus('error', e instanceof Error ? e.message : 'Something went wrong.')
@@ -173,7 +152,7 @@ export default function UploadPanel() {
       {dragging && (
         <div
           style={{
-            position: 'absolute',
+            position: 'fixed',
             inset: 12,
             zIndex: 10,
             pointerEvents: 'none',
@@ -193,8 +172,7 @@ export default function UploadPanel() {
         </div>
       )}
 
-      <div style={panel}>
-        <div style={title}>Create hologram</div>
+      <Panel title="Create hologram">
 
         <input
           style={input}
@@ -261,7 +239,31 @@ export default function UploadPanel() {
         <div style={{ marginTop: 6, color: '#7fb8c8' }}>
           Model: <span style={{ color: '#ffffff' }}>{modelName}</span> ({source})
         </div>
-      </div>
+
+        <div style={{ marginTop: 10, color: '#38e8ff', letterSpacing: 2, textTransform: 'uppercase' }}>
+          Library
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+          {library.map((m) => (
+            <button
+              key={m.id}
+              disabled={busy}
+              onClick={() => loadLibraryItem(m)}
+              style={{
+                padding: '5px 9px',
+                fontSize: 11,
+                color: m.name === modelName ? '#02060d' : '#cfeeff',
+                background: m.name === modelName ? '#38e8ff' : 'transparent',
+                border: '1px solid rgba(56,232,255,0.6)',
+                borderRadius: 4,
+                cursor: 'pointer',
+              }}
+            >
+              {m.name}
+            </button>
+          ))}
+        </div>
+      </Panel>
     </>
   )
 }

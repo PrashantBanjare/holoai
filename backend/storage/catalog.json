@@ -1,0 +1,26 @@
+[
+  {
+    "id": "engine",
+    "name": "Engine",
+    "file": "engine.glb",
+    "keywords": ["engine", "motor", "cylinder", "piston", "combustion"]
+  },
+  {
+    "id": "truck",
+    "name": "Truck",
+    "file": "truck.glb",
+    "keywords": ["truck", "lorry", "car", "vehicle", "van", "automobile"]
+  },
+  {
+    "id": "gearbox",
+    "name": "Gearbox",
+    "file": "gearbox.glb",
+    "keywords": ["gearbox", "gear", "transmission", "gears", "mechanism"]
+  },
+  {
+    "id": "saw",
+    "name": "Saw",
+    "file": "saw.glb",
+    "keywords": ["saw", "tool", "reciprocating", "power tool", "blade", "cutter"]
+  }
+]

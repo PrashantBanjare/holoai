@@ -9,7 +9,7 @@ export type TrackedHand = {
 
 const WASM_URL = '/wasm'
 const MODEL_URL =
-  'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task'
+  '/models/hand_landmarker.task'
 
 export class HandTracker {
   private landmarker: HandLandmarker | null = null

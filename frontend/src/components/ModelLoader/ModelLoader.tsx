@@ -4,17 +4,22 @@ import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 import { createHologramMaterial } from '../../three/HologramMaterial'
 import { useComponentStore, type ComponentNode } from '../../store/useComponentStore'
- 
+import { useAppStore } from '../../store/useAppStore'
+
 type Props = { url: string }
 
 type Holo = {
   mat: THREE.ShaderMaterial
   edgeMat: THREE.LineBasicMaterial
+  edges: THREE.LineSegments
+  solid: THREE.MeshStandardMaterial
   amount: number
 }
 
+const SOLID_HIGHLIGHT = new THREE.Color('#dc143c')
+
 const EDGE_BASE = new THREE.Color('#9ff7ff')
-const EDGE_HIGHLIGHT = new THREE.Color('#ff3355')
+const EDGE_HIGHLIGHT = new THREE.Color('#ffd27a')
 
 const isMesh = (o: THREE.Object3D) => (o as THREE.Mesh).isMesh === true
 
@@ -24,6 +29,18 @@ const hasMesh = (o: THREE.Object3D): boolean => {
     if (isMesh(c)) found = true
   })
   return found
+}
+
+const meshStats = (o: THREE.Object3D) => {
+  let meshCount = 0
+  let triangles = 0
+  o.traverse((c) => {
+    if (!isMesh(c)) return
+    const g = (c as THREE.Mesh).geometry as THREE.BufferGeometry
+    meshCount++
+    triangles += Math.round((g.index ? g.index.count : (g.attributes.position?.count ?? 0)) / 3)
+  })
+  return { meshCount, triangles }
 }
 
 const prettify = (raw: string, fallback: string) =>
@@ -55,7 +72,7 @@ function buildRegistry(root: THREE.Object3D): ComponentNode[] {
     const name =
       depth === 0 && (!obj.name || obj.name === 'Scene') ? 'Model' : prettify(obj.name, fallback)
 
-    nodes.push({ id, name, parentId, depth, kind: own ? 'part' : 'assembly' })
+    nodes.push({ id, name, parentId, depth, kind: own ? 'part' : 'assembly', ...meshStats(obj) })
     if (own) obj.userData.componentChain = chain
 
     for (const k of kids) visit(k, id, chain, depth + 1)
@@ -93,6 +110,11 @@ export default function ModelLoader({ url }: Props) {
       if (!isMesh(obj)) return
       const mesh = obj as THREE.Mesh
       if (!mesh.userData.holo) {
+        const original = mesh.material as THREE.Material
+        const solid =
+          original instanceof THREE.MeshStandardMaterial
+            ? original.clone()
+            : new THREE.MeshStandardMaterial({ color: '#9aa7b5', metalness: 0.6, roughness: 0.4 })
         const mat = createHologramMaterial()
         const edgeMat = new THREE.LineBasicMaterial({
           color: EDGE_BASE.clone(),
@@ -102,9 +124,10 @@ export default function ModelLoader({ url }: Props) {
         const edges = new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry, 25), edgeMat)
         edges.raycast = () => {} // outlines must not block mouse picking
         mesh.add(edges)
-        mesh.userData.holo = { mat, edgeMat, amount: 0 } as Holo
+        mesh.userData.holo = { mat, edgeMat, edges, solid, amount: 0 } as Holo
       }
-      mesh.material = (mesh.userData.holo as Holo).mat
+      mesh.castShadow = true
+      mesh.receiveShadow = true
       list.push(mesh)
     })
 
@@ -116,6 +139,7 @@ export default function ModelLoader({ url }: Props) {
   useFrame(({ clock }, delta) => {
     const { selectedId, hoveredId, isolatedId } = useComponentStore.getState()
     const t = clock.getElapsedTime()
+    const solidView = useAppStore.getState().viewMode === 'solid'
 
     for (const mesh of meshes.current) {
       const holo = mesh.userData.holo as Holo
@@ -128,9 +152,18 @@ export default function ModelLoader({ url }: Props) {
         selectedId && chain.includes(selectedId) ? 1 : hoveredId && chain.includes(hoveredId) ? 0.45 : 0
       holo.amount = THREE.MathUtils.damp(holo.amount, target, 12, delta)
 
-      holo.mat.uniforms.uTime.value = t
-      holo.mat.uniforms.uHighlight.value = holo.amount
-      holo.edgeMat.color.copy(EDGE_BASE).lerp(EDGE_HIGHLIGHT, holo.amount)
+      const wanted = solidView ? holo.solid : holo.mat
+      if (mesh.material !== wanted) mesh.material = wanted
+      holo.edges.visible = !solidView
+
+      if (solidView) {
+        holo.solid.emissive.copy(SOLID_HIGHLIGHT)
+        holo.solid.emissiveIntensity = holo.amount * 0.9
+      } else {
+        holo.mat.uniforms.uTime.value = t
+        holo.mat.uniforms.uHighlight.value = holo.amount
+        holo.edgeMat.color.copy(EDGE_BASE).lerp(EDGE_HIGHLIGHT, holo.amount)
+      }
     }
   })
 

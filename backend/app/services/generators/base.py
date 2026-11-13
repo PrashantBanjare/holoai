@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 @dataclass
 class GenerationInput:
-    text: str | None = None
+    prompt: str | None = None
     image_path: str | None = None
 
 
@@ -12,11 +12,13 @@ class GenerationInput:
 class GenerationResult:
     model_id: str
     name: str
-    source: str
+    source: str  # which generator produced it
 
 
 class ModelGenerator(ABC):
-    """Every generator (mock now, a real AI later) implements this one method."""
+    """Anything that turns text/image into a 3D model. Swap implementations without touching routes."""
+
+    name: str
 
     @abstractmethod
-    async def generate(self, request: GenerationInput) -> GenerationResult: ...
+    def generate(self, data: GenerationInput) -> GenerationResult: ...

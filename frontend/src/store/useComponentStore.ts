@@ -6,6 +6,8 @@ export type ComponentNode = {
   parentId: string | null
   depth: number
   kind: 'part' | 'assembly'
+  meshCount: number
+  triangles: number
 }
 
 type ComponentState = {

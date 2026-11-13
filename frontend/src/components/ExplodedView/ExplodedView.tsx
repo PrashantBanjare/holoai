@@ -1,48 +1,13 @@
-import type { CSSProperties } from 'react'
 import { useExplodeStore } from '../../store/useExplodeStore'
-
-const panel: CSSProperties = {
-  position: 'absolute',
-  left: '50%',
-  bottom: 16,
-  transform: 'translateX(-50%)',
-  width: 300,
-  padding: 12,
-  background: 'rgba(2, 20, 32, 0.7)',
-  border: '1px solid rgba(56, 232, 255, 0.4)',
-  borderRadius: 8,
-  backdropFilter: 'blur(6px)',
-  fontSize: 12,
-}
-
-const title: CSSProperties = {
-  letterSpacing: 2,
-  textTransform: 'uppercase',
-  color: '#38e8ff',
-  marginBottom: 8,
-}
-
-const btn = (active = false, disabled = false): CSSProperties => ({
-  flex: 1,
-  padding: '7px 6px',
-  fontSize: 11,
-  textTransform: 'uppercase',
-  letterSpacing: 1,
-  color: disabled ? '#4d7a88' : active ? '#02060d' : '#cfeeff',
-  background: active ? '#38e8ff' : 'transparent',
-  border: `1px solid ${disabled ? 'rgba(56,232,255,0.2)' : 'rgba(56,232,255,0.6)'}`,
-  borderRadius: 4,
-  cursor: disabled ? 'default' : 'pointer',
-})
+import Panel from '../../ui/Panel'
+import { btn } from '../../ui/theme'
 
 export default function ExplodedView() {
   const s = useExplodeStore()
   const noModel = s.totalParts === 0
 
   return (
-    <div style={panel}>
-      <div style={title}>Exploded view</div>
-
+    <Panel title="Exploded view">
       <div style={{ display: 'flex', gap: 6 }}>
         <button style={btn(s.exploded, noModel)} disabled={noModel} onClick={s.toggle}>
           {s.exploded ? 'Exploded' : 'Explode'}
@@ -93,6 +58,6 @@ export default function ExplodedView() {
           <div style={{ marginTop: 4, color: '#7fb8c8' }}>Turn Explode on first, then press Next.</div>
         </div>
       )}
-    </div>
+    </Panel>
   )
 }

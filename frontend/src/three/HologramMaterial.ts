@@ -1,12 +1,19 @@
 import * as THREE from 'three'
 
 const vertexShader = /* glsl */ `
+  uniform float uTime;
   varying vec3 vNormal;
   varying vec3 vViewDir;
   varying vec3 vWorldPos;
 
   void main() {
     vec4 worldPos = modelMatrix * vec4(position, 1.0);
+
+    // Subtle distortion: a thin band sweeps upward and nudges vertices sideways
+    float bandY = mix(-1.5, 1.5, fract(uTime * 0.18));
+    float w = exp(-pow((worldPos.y - bandY) * 5.0, 2.0));
+    worldPos.x += sin(worldPos.y * 30.0 + uTime * 20.0) * 0.012 * w;
+
     vWorldPos = worldPos.xyz;
     vNormal = normalize(normalMatrix * normal);
     vec4 mvPos = viewMatrix * worldPos;
@@ -44,6 +51,7 @@ const fragmentShader = /* glsl */ `
     gl_FragColor = vec4(base * intensity, alpha);
   }
 `
+
 export function createHologramMaterial() {
   return new THREE.ShaderMaterial({
     vertexShader,

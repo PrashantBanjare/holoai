@@ -1,23 +1,20 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .api.routes import images, models
-from .config import settings
+from app.api.routes import images, models
+from app.config import settings
 
-app = FastAPI(title="HoloAI")
+app = FastAPI(title="HoloAI API", version="0.2.0")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.origins,
     allow_methods=["GET", "POST"],
-    allow_headers=["*"],
+    allow_headers=["Content-Type"],
 )
 
-for sub in ("uploads", "models"):
-    (settings.storage_path / sub).mkdir(parents=True, exist_ok=True)
-
-app.include_router(models.router, prefix="/api")
-app.include_router(images.router, prefix="/api")
+app.include_router(images.router)
+app.include_router(models.router)
 
 
 @app.get("/api/health")

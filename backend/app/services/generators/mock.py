@@ -1,34 +1,29 @@
-from pathlib import Path
+from fastapi import HTTPException
 
-from .base import GenerationInput, GenerationResult, ModelGenerator
-
-KEYWORDS = {
-    "engine": ["engine", "motor", "piston", "cylinder", "gearbox", "machine"],
-    "truck": ["truck", "car", "van", "vehicle", "lorry", "automobile"],
-}
+from app.services.generators.base import GenerationInput, GenerationResult, ModelGenerator
+from app.services.model_service import load_catalog, match_entry
 
 
 class MockGenerator(ModelGenerator):
-    """Picks a model from the local library by keyword. No AI involved."""
+    """Picks the closest model from the local catalog. A real generator would call an AI service."""
 
-    def __init__(self, models_dir: Path):
-        self.models_dir = models_dir
+    name = "catalog"
 
-    async def generate(self, request: GenerationInput) -> GenerationResult:
-        available = {p.stem for p in self.models_dir.glob("*.glb")}
-        if not available:
-            raise FileNotFoundError("No models found in storage/models.")
+    def generate(self, data: GenerationInput) -> GenerationResult:
+        text = data.prompt or ""
+        entry = match_entry(text) if text else None
 
-        text = (request.text or "").lower()
-        chosen = next(
-            (
-                model_id
-                for model_id, words in KEYWORDS.items()
-                if model_id in available and any(w in text for w in words)
-            ),
-            None,
-        )
-        if chosen is None:
-            chosen = "engine" if "engine" in available else sorted(available)[0]
+        if entry is None:
+            catalog = load_catalog()
+            if not catalog:
+                raise HTTPException(status_code=500, detail="The model catalog is empty.")
+            names = ", ".join(e.name.lower() for e in catalog)
+            raise HTTPException(
+                status_code=404,
+                detail=f'No model matches "{text or "your input"}". Try one of: {names}.',
+            )
+        return GenerationResult(model_id=entry.id, name=entry.name, source=self.name)
 
-        return GenerationResult(model_id=chosen, name=chosen.title(), source="mock-library")
+
+# One place to change when a real generator is added.
+generator: ModelGenerator = MockGenerator()

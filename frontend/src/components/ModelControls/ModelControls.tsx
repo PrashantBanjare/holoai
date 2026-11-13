@@ -1,22 +1,10 @@
 import type { CSSProperties } from 'react'
 import { useAppStore } from '../../store/useAppStore'
+import Panel from '../../ui/Panel'
+import { C } from '../../ui/theme'
 
 const ROT = 0.3
 const MOVE = 0.25
-
-const panel: CSSProperties = {
-  position: 'absolute',
-  left: 16,
-  bottom: 16,
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 10,
-  padding: 12,
-  background: 'rgba(2, 20, 32, 0.7)',
-  border: '1px solid rgba(56, 232, 255, 0.4)',
-  borderRadius: 8,
-  backdropFilter: 'blur(6px)',
-}
 
 const row: CSSProperties = { display: 'flex', gap: 6, alignItems: 'center' }
 
@@ -25,7 +13,7 @@ const label: CSSProperties = {
   fontSize: 12,
   letterSpacing: 1,
   textTransform: 'uppercase',
-  color: '#38e8ff',
+  color: C.accent,
 }
 
 const btn: CSSProperties = {
@@ -42,7 +30,8 @@ export default function ModelControls() {
   const { rotateBy, moveBy, zoomBy, reset } = useAppStore()
 
   return (
-    <div style={panel}>
+    <Panel title="Controls">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div style={row}>
         <span style={label}>Rotate</span>
         <button style={btn} onClick={() => rotateBy(0, -ROT)}>◀</button>
@@ -65,6 +54,7 @@ export default function ModelControls() {
       <div style={row}>
         <button style={{ ...btn, width: '100%' }} onClick={reset}>Reset</button>
       </div>
-    </div>
+      </div>
+    </Panel>
   )
 }

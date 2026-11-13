@@ -32,6 +32,7 @@ export default function HandPicker() {
 
     comp.hover(id)
     owns.current = true
+    if (id) usePointerStore.setState({ lastHoverId: id, lastHoverAt: performance.now() })
 
     if (p.trigger !== lastTrigger.current) {
       lastTrigger.current = p.trigger

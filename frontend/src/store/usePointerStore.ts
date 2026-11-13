@@ -6,6 +6,8 @@ type PointerState = {
   y: number
   dwell: number // 0..1 progress of hold-to-select
   trigger: number // increases by 1 each time a select is requested
+  lastHoverId: string | null // last part the pointer was over
+  lastHoverAt: number // when, in performance.now() milliseconds
   publish: (p: { active: boolean; x: number; y: number; dwell: number; trigger: boolean }) => void
   clear: () => void
 }
@@ -16,6 +18,8 @@ export const usePointerStore = create<PointerState>((set) => ({
   y: 0,
   dwell: 0,
   trigger: 0,
+  lastHoverId: null,
+  lastHoverAt: 0,
   publish: (p) =>
     set((s) => ({
       active: p.active,

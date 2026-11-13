@@ -13,8 +13,14 @@ export type AnalysisResult = {
   height: number
   format: string
   dominant_color: string
-  detected_object: string | null
   note: string
+}
+
+export type CatalogItem = {
+  id: string
+  name: string
+  keywords: string[]
+  url: string
 }
 
 export type GenerateResult = {
@@ -67,4 +73,8 @@ export function generateModel(body: { prompt?: string; image_id?: string }) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
+}
+
+export function listModels() {
+  return request<CatalogItem[]>('/api/models')
 }

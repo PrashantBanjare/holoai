@@ -1,41 +1,54 @@
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 
-from ...schemas import GenerateRequest, GenerateResponse
-from ...services import model_service
-from ...services.generators.base import GenerationInput
-from ...utils.security import find_upload
+from app.config import settings
+from app.schemas import CatalogItem, GenerateRequest, GenerateResponse
+from app.services.generators.base import GenerationInput
+from app.services.generators.mock import generator
+from app.services.model_service import get_entry, load_catalog
+from app.utils.security import check_model_id, find_upload
 
-router = APIRouter()
+router = APIRouter(prefix="/api", tags=["models"])
+
+
+def _url(model_id: str) -> str:
+    return f"/api/model/{model_id}/file"
+
+
+@router.get("/models", response_model=list[CatalogItem])
+def list_models():
+    return [
+        CatalogItem(id=e.id, name=e.name, keywords=list(e.keywords), url=_url(e.id)) for e in load_catalog()
+    ]
 
 
 @router.post("/generate-model", response_model=GenerateResponse)
-async def generate_model(req: GenerateRequest):
-    text = (req.prompt or "").strip()
-    if not text and not req.image_id:
-        raise HTTPException(400, "Provide a text prompt or an uploaded image id.")
+def generate_model(body: GenerateRequest):
+    prompt = (body.prompt or "").strip() or None
+    if not prompt and not body.image_id:
+        raise HTTPException(status_code=400, detail="Send a prompt or an image_id.")
 
-    image_path = str(find_upload(req.image_id)) if req.image_id else None
-    try:
-        result = await model_service.generator.generate(
-            GenerationInput(text=text or None, image_path=image_path)
-        )
-    except FileNotFoundError as e:
-        raise HTTPException(503, str(e))
+    data = GenerationInput(prompt=prompt)
+    if body.image_id:
+        data.image_path = str(find_upload(settings.uploads_dir, body.image_id))
+        if not prompt:
+            raise HTTPException(
+                status_code=422,
+                detail="Images are not recognised automatically yet. Type an object name too.",
+            )
 
-    return GenerateResponse(
-        model_id=result.model_id,
-        name=result.name,
-        url=f"/api/model/{result.model_id}/file",
-        source=result.source,
-    )
+    result = generator.generate(data)
+    return GenerateResponse(model_id=result.model_id, name=result.name, url=_url(result.model_id), source=result.source)
 
 
 @router.get("/model/{model_id}/metadata")
-def get_metadata(model_id: str):
-    return model_service.metadata(model_id)
+def model_metadata(model_id: str):
+    entry = get_entry(check_model_id(model_id))
+    size = (settings.models_dir / entry.file).stat().st_size
+    return {"model_id": entry.id, "name": entry.name, "format": "glb", "size_bytes": size, "keywords": list(entry.keywords)}
 
 
 @router.get("/model/{model_id}/file")
-def get_model_file(model_id: str):
-    return FileResponse(model_service.model_path(model_id), media_type="model/gltf-binary")
+def model_file(model_id: str):
+    entry = get_entry(check_model_id(model_id))
+    return FileResponse(settings.models_dir / entry.file, media_type="model/gltf-binary", filename=entry.file)
