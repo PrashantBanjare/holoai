@@ -1,4 +1,4 @@
-# HoloAI
+# HoloAI -- https://holoai-mauve.vercel.app/
 
 An interactive 3D **hologram-style viewer** you control with your **hands** through a webcam, or with your **voice**. It runs in the browser on a normal screen: no projection hardware, just shaders, glow and real-time hand tracking.
 
